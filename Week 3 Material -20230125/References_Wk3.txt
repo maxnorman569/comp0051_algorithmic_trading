@@ -1,0 +1,5 @@
+https://www.researchgate.net/publication/258882063_Time_Series_and_Its_Applications
+
+is a link to the PDF of the book Shumway and Stoffer, Time Series and its Applications. 
+
+We will cover the chapter on ARIMA models this week. 
