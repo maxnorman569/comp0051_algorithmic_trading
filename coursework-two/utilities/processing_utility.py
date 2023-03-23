@@ -1,11 +1,20 @@
-import datetime
-import pandas as pd
+# numeric imports
+import torch
 import numpy as np
 
+# data import
+import pandas as pd
 import pandas_datareader.data as web
-
 import yfinance as yf
 
+# misc imports
+import datetime
+
+# typing imports
+from typing import List, Tuple, Dict
+
+
+########## GET DATA FUNCTIONS ##########
 
 def get_closing_price_from_yfinance( 
         ticker_symbol : str, 
@@ -96,15 +105,15 @@ def get_daily_excess_return(
 
     Arguments:
     ---------- 
-    closing_price               : {pandas.DataFrame indexed by date}
-                                        > A pandas dataframe of the closing prices for a given stock
-    daily_risk_free_rate        : {pandas.DataFrame indexed by date}
-                                        > A pandas dataframe of the daily risk-free rate
+    closing_price           : {pandas.DataFrame indexed by date}
+                                > A pandas dataframe of the closing prices for a given stock
+    daily_risk_free_rate    : {pandas.DataFrame indexed by date}
+                                > A pandas dataframe of the daily risk-free rate
     
     Returns:
     ----------
-    df                          : {pandas.DataFrame indexed by date}
-                                        > A pandas dataframe for the daily excess returns for a given stock
+    df                      : {pandas.DataFrame indexed by date}
+                                > A pandas dataframe for the daily excess returns for a given stock
     """
     
     # get prcing column
@@ -157,8 +166,8 @@ def get_q_2_cw_data():
     
     Returns:
     ----------
-    df              : {pandas.DataFrame}
-                        > A pandas dataframe containing all data for quetion 2 of the coursework.
+    df  : {pandas.DataFrame}
+            > A pandas dataframe containing all data for quetion 2 of the coursework.
     """
     # get price data
     p_df = get_closing_price_from_yfinance(
@@ -179,10 +188,84 @@ def get_q_2_cw_data():
 
     # get nomarlised excess returns
     df['normalised_excess_returns'] = normalise_data(df['daily_excess_returns'].to_numpy())
-    
+
     return df
 
+
+########## GENERAL PROCESSING FUNCTIONS ##########
+
+def get_train_test_split(
+        x_data : torch.Tensor,
+        y_data : torch.Tensor,
+        split : float,
+        ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    Returns a train and test split of the data.
     
+    Arguments:
+    ----------
+    x_data      : {torch.Tensor}
+                    > The input data.
+    y_data      : {torch.Tensor}
+                    > The output data.
+    split       : {float}
+                    > The split ratio.
+    
+    Returns:
+    ----------
+    x_train     : {torch.Tensor}
+                    > The input training data.
+    y_train     : {torch.Tensor}
+                > The output training data.
+    x_test      : {torch.Tensor}
+                    > The input test data.
+    y_test      : {torch.Tensor}
+                    > The output test data.
+    """
+    # get split index
+    split_index = int(len(x_data) * split)
+
+    # get train and test data
+    x_train = x_data[:split_index]
+    y_train = y_data[:split_index]
+    x_test = x_data[split_index:]
+    y_test = y_data[split_index:]
+
+    return x_train, y_train, x_test, y_test
 
 
+def get_moving_average(
+    series : pd.Series,
+    ma_window : int,
+    bollinger_bands : bool = True,
+    ) -> pd.DataFrame:
+    """
+    Returns a pandas dataframe of the moving average for a given window.
+    If bollinger_bands is True, then the upper and lower bollinger bands are also returned.
+
+    Arguments:
+    ----------
+    series      : {pandas.Seres}
+                    > A pandas series of the data.
+    ma_window   : {int}
+                    > The moving average window.
     
+    Returns:
+    ----------
+    df          : {pandas.DataFrame}
+                    > A pandas dataframe of the moving average for a given window.
+    """
+    # get moving average
+    ma_series = series.rolling(window=ma_window).mean()
+
+    if bollinger_bands:
+        # get upper and lower bollinger bands
+        upper_bb = ma_series + (series.rolling(window=ma_window).std() * 2)
+        lower_bb = ma_series - (series.rolling(window=ma_window).std() * 2)
+
+        # concatenate data
+        ma_series = pd.concat([ma_series, upper_bb, lower_bb], axis=1)
+        ma_series.columns = ['ma', 'upper_bb', 'lower_bb']
+
+    return ma_series
+
