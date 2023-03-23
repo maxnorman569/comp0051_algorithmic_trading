@@ -195,10 +195,10 @@ def get_q_2_cw_data():
 ########## GENERAL PROCESSING FUNCTIONS ##########
 
 def get_train_test_split(
-        x_data : torch.Tensor,
-        y_data : torch.Tensor,
+        x_data : np.ndarray,
+        y_data : np.ndarray,
         split : float,
-        ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Returns a train and test split of the data.
     
@@ -238,6 +238,7 @@ def get_moving_average(
     series : pd.Series,
     ma_window : int,
     bollinger_bands : bool = True,
+    threshold : float = 2
     ) -> pd.DataFrame:
     """
     Returns a pandas dataframe of the moving average for a given window.
@@ -260,8 +261,8 @@ def get_moving_average(
 
     if bollinger_bands:
         # get upper and lower bollinger bands
-        upper_bb = ma_series + (series.rolling(window=ma_window).std() * 2)
-        lower_bb = ma_series - (series.rolling(window=ma_window).std() * 2)
+        upper_bb = ma_series + (series.rolling(window=ma_window).std() * threshold)
+        lower_bb = ma_series - (series.rolling(window=ma_window).std() * threshold)
 
         # concatenate data
         ma_series = pd.concat([ma_series, upper_bb, lower_bb], axis=1)
