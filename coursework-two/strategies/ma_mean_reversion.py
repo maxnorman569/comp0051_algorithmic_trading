@@ -156,7 +156,7 @@ def plot_strategy(
     plot_axis.plot(normalised_daily_excess_returns, color = 'black', lw = 0.8)
 
     # plot moving average
-    plot_axis.plot(moving_average, color = 'steelblue', lw = 0.8)
+    plot_axis.plot(moving_average, color = 'steelblue', lw = 1.)
 
     # plot boillinger bands
     plot_axis.fill_between(_range, upper_boillinger_band, lower_boillinger_band, color = 'steelblue', alpha = 0.1)
