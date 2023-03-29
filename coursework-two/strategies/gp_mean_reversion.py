@@ -4,30 +4,19 @@ import numpy as np
 
 # gp imports
 import gpytorch as gp
-from GP import *
-
-# data imports
-import pandas as pd
 
 # plotting imports
 import matplotlib.pyplot as plt
-
-# utility imports
-from utilities.processing_utility import get_moving_average
-
-# misc imports
-import datetime
-from tqdm import tqdm
 
 # typing imports
 from typing import List, Tuple, Dict
 
 
-class ExactGPModel(gp.models.ExactGP):
+class ConstantGP(gp.models.ExactGP):
     """  Closed form solution to GP regression """
     
     def __init__(self, train_x, train_y, likelihood):
-        super(ExactGPModel, self).__init__(train_x, train_y, likelihood)
+        super(ConstantGP, self).__init__(train_x, train_y, likelihood)
         self.mean_module = gp.means.ConstantMean()
         self.covar_module = gp.kernels.ScaleKernel(gp.kernels.RBFKernel())
     
@@ -91,7 +80,7 @@ def optimise_marginal_likelihood(
     """
     # construct model
     likelihood = gp.likelihoods.GaussianLikelihood()
-    model = ExactGPModel(inputs, targets, likelihood)
+    model = ConstantGP(inputs, targets, likelihood)
 
     # put into training mode
     model.train()
@@ -128,12 +117,12 @@ def optimise_marginal_likelihood(
     return lengthscale_hat, noise_hat
 
 
-def get_gp(
+def get_constant_gp(
     x_train : torch.Tensor,
     y_train : torch.Tensor,
     length_scale : float = 2.5,
     noise : float = 0.5,
-    ) -> gp.models.ExactGP:
+    ) -> ConstantGP:
     """
     Consturcts a GP model with Gaussian likelihood
 
@@ -155,7 +144,7 @@ def get_gp(
     """
     # instantiate model
     likelihood = gp.likelihoods.GaussianLikelihood()
-    model = ExactGPModel(x_train, y_train, likelihood)
+    model = ConstantGP(x_train, y_train, likelihood)
 
     # update lengthscale and noise
     model.covar_module.base_kernel.lengthscale = torch.tensor(length_scale)
@@ -199,7 +188,7 @@ def get_x_star(
 
 
 def get_gp_posterior(
-    gp_model : gp.models.ExactGP,
+    gp_model : ConstantGP,
     x_star : torch.Tensor,
     ) -> gp.distributions.MultivariateNormal:
     """
@@ -250,82 +239,75 @@ def get_x_star_idx(
     return x_star_index
 
 
-def gaussian_process_mean_reversion_strategy(
-    price_series : torch.Tensor,
-    daily_excess_returns_series : torch.Tensor,
-    x_series : torch.Tensor,
-    length_scale : float = 2.5,
-    noise : float = 0.5,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, List[int], List[int]]:
+def get_gp_mean_reversion_signal(
+        X : np.ndarray,
+        R : np.ndarray,
+        lengthscale : float,
+        noise : float
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
-    pass
+    Constructs a signal for a constant GP mean reversion trading strategy.
+
+    Arguments:
+    ----------
+    X           : {np.ndarray}
+                    > x training data to condition on.
+    R           : {np.ndarray}
+                    > y training data to condition on.
+    lengthscale : {float}
+                    > lengthscale of the RBF kernel.
+    noise       : {float}
+
+    Returns:
+    ----------
+    signal      : {np.ndarray}
+                    > Signal for trading strategy.
+    buy_mask    : {np.ndarray}
+                    > Mask for buy signals.
+    sell_mask   : {np.ndarray}
+                    > Mask for sell signals.
     """
-    # initialise No. of shares & cash
-    w = np.zeros(np.shape(price_series))
-    cash = np.zeros(np.shape(price_series))
-    cash[0] = 1.
+    buy_mask = torch.zeros_like(X)
+    sell_mask = torch.zeros_like(X)
 
-    # get x_star
-    x_star = get_x_star(x_series)
+    buy_delta = torch.zeros_like(X)
+    sell_delta = torch.zeros_like(X)
 
-    # save long and short indices
-    long_idx = []
-    short_idx = []
+    signal = torch.zeros_like(X)
 
-   # backtest strategy
-    for i, (p, r) in tqdm(enumerate(zip(price_series[:-1], daily_excess_returns_series[:-1]))):
+    for i, (x, r) in enumerate(zip(X, R)):
 
-        # get current values
-        x = x_series[i]
-        
-        # get GP for the current data
-        gp_model = get_gp(x_train = x_series[:i+1], 
-                          y_train = daily_excess_returns_series[:i+1], 
-                          length_scale = length_scale, 
-                          noise = noise,)
-
-        # get posterior
-        gp_posterior = get_gp_posterior(gp_model, x_star, )
-
-        # get confidence region
-        gp_lower, gp_upper = gp_posterior.confidence_region()
-
-        # get x_star index
-        x_star_index = get_x_star_idx(x, x_star)
-
-        # get strategy metrics
-        mean = gp_posterior.mean[x_star_index]
-        upper_cci = gp_upper[x_star_index]
-        lower_cci = gp_lower[x_star_index]
-
-        # if we are inside the bollinger band -> hold
-        if (r >= lower_cci) and (r <= upper_cci):
-            w[i+1] = w[i]
-            cash[i+1] = cash[i]
-            continue
-        
-        # if we are below the bollinger band -> buy
-        if r < lower_cci:
-            w[i+1] = cash[i] / p + w[i]
-            cash[i+1] = 0
-            long_idx.append(i)
-            continue
-        
-        # if we are above the bollinger band - sell
-        if r > upper_cci:
-            cash[i+1] = w[i] * p + cash[i]
-            w[i+1] = 0
-            short_idx.append(i)
+        if i == 0:
             continue
 
-    # strategy returns
-    strategy_returns = (price_series * w) + cash
+        constant_gp = get_constant_gp(x_train=X[:i], y_train=R[:i], length_scale=lengthscale, noise=noise)
+        f_preds = get_gp_posterior(constant_gp, x.unsqueeze(-1))
+        lower, upper = f_preds.confidence_region()
 
-    # from collections import namedtuple
-    # Data = namedtuple('Data', ['strategy_returns', 'w', 'cash', 'long_x', 'short_x', 'gp_posterior', 'gp_lower', 'gp_upper'])
-    # useful_stuff = Data(strategy_returns, w, cash, long_x, short_x, gp_posterior, gp_lower, gp_upper)
+        if (r > lower[-1]) and (r < upper[-1]):
 
-    return strategy_returns, w, cash, long_idx, short_idx, gp_posterior
+            if (signal[i-1] > 0) and (r > f_preds.mean[-1]):
+                signal[i] = 0.
+
+            elif (signal[i-1] < 0) and (r < f_preds.mean[-1]):
+                signal[i] = 0.
+
+            else:
+                signal[i] = signal[i-1]
+
+        if r <= lower[-1]:
+            buy_mask[i] = 1
+            delta = torch.clamp(r - lower[-1], min=-1, max=None).item()
+            buy_delta[i] = delta
+            signal[i] = delta
+        
+        if r >= upper[-1]:
+            sell_mask[i] = 1
+            delta = torch.clamp(r - upper[-1], min=None, max=1).item()
+            sell_delta[i] = delta
+            signal[i] = delta
+
+    return signal, buy_mask, sell_mask
 
 
 def plot_strategy(

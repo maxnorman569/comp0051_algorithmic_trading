@@ -18,93 +18,69 @@ import datetime
 from typing import List, Tuple, Dict
 
 
-def moving_average_mean_reversion_strategy(
-        normalised_daily_excess_returns : np.ndarray,
-        price_series : np.ndarray,
-        window_size : int = 10,
-        boillinger_band_threshold : float = 1.5,
-        initial_cash : float = 1.,
-        ) -> Tuple[np.ndarray, np.ndarray]:
-    """ 
-    Performs a moving average mean reversion strategy on a given 
-    price series and corresponding daily excess returns.
+def get_ma_mean_reversion_signal(
+    normalised_daily_excess_returns_series: np.ndarray,
+    window_size : int, 
+    ) -> np.ndarray:
+    """
+    Get the signal for a moving average mean reversion strategy.
 
     Arguments:
     ----------
-    daily_excess_returns    : {np.ndarray}
-                                > An array of normalised daily excess returns.
-    price_series            : {np.ndarray}
-                                > An array of prices.
-    window_size             : {int}
-                                > The window size for the moving average.
-    boillinger_band_threshold : {float}
-                                > The threshold for the boillinger band.
-    initial_cash            : {float}
-                                > The initial cash to start with.
+    normalised_daily_excess_returns_series  : {np.ndarray}
+                                                > The normalised daily excess returns series.
 
+    window_size                             : {int}
+                                                > The window size for the moving average.
+    
     Returns:
     --------
-    cash_series             : {np.ndarray}
-                                > An array of cash values.
+    signal                                  : {np.ndarray}
+                                                > The signal for the moving average mean reversion strategy.
     """
-
-    assert len(normalised_daily_excess_returns) == len(price_series), "The length of the daily excess returns and price series must be the same."
-
     # get moving average and boillinger bands
     ma_bb_data = get_moving_average(
-                    series = pd.Series(normalised_daily_excess_returns),
+                    series = pd.Series(normalised_daily_excess_returns_series),
                     ma_window = window_size, 
                     bollinger_bands = True, 
-                    threshold = boillinger_band_threshold)
+                    threshold = 2.)
 
     # convert to numpy arrays
     moving_average = ma_bb_data['ma'].to_numpy()
-    upper_boillinger_band = ma_bb_data['upper_bb'].to_numpy()
-    lower_boillinger_band = ma_bb_data['lower_bb'].to_numpy()
+    upper = ma_bb_data['upper_bb'].to_numpy()
+    lower = ma_bb_data['lower_bb'].to_numpy()
 
-    # initialise No. of shares & cash
-    w = np.zeros(np.shape(price_series))
-    cash = np.zeros(np.shape(price_series))
-    cash[0] = initial_cash
+    # get signal
+    signal = torch.zeros_like(normalised_daily_excess_returns_series)    
 
-    # backtest strategy
-    for i, r in enumerate(normalised_daily_excess_returns[:-1]):
+    buy_count = 0
+    sell_count = 0
 
-        # get current values
-        ma = moving_average[i]
-        upper_bb = upper_boillinger_band[i]
-        lower_bb = lower_boillinger_band[i]
+    for i, (value, ma, upper, lower) in enumerate(zip(normalised_daily_excess_returns_series, moving_average, upper, lower)):
 
-        current_price = price_series[i]
+        if i == 0:
+            signal[i] = 0
 
-        # if we have insufficient data -> do nothing
-        if np.isnan(ma):
-            w[i+1] = w[i]
-            cash[i+1] = cash[i]
-            continue
+        if (value < upper) and (value > lower):
+            
+            if (signal[i-1] > 0) and (value > ma):
+                signal[i] = 0
+            
+            elif (signal[i-1] < 0) and (value < ma):
+                signal[i] = 0
+            
+            else:
+                signal[i] = signal[i-1]
 
-        # if we are inside the bollinger band -> hold
-        if (r >= lower_bb) and (r <= upper_bb):
-            w[i+1] = w[i]
-            cash[i+1] = cash[i]
-            continue
-        
-        # if we are below the bollinger band -> buy
-        if r < lower_bb:
-            w[i+1] = cash[i] / current_price + w[i]
-            cash[i+1] = 0
-            continue
-        
-        # if we are above the bollinger band - sell
-        if r > upper_bb:
-            cash[i+1] = w[i] * current_price + cash[i]
-            w[i+1] = 0
-            continue
+        if value <= lower:
+            buy_count += 1
+            signal[i] = torch.clamp(value - lower, min = -1, max = None).item()
+
+        if value >= upper:
+            sell_count += 1
+            signal[i] = torch.clamp(value - upper, min = None, max = 1).item()
     
-    # strategy returns
-    strategy_returns = (price_series * w) + cash
-
-    return strategy_returns, w, cash
+    return np.array(signal)
 
 
 def plot_strategy(
@@ -166,68 +142,3 @@ def plot_strategy(
 
     # plot sell calls
     plot_axis.scatter(_range[sell_mask], normalised_daily_excess_returns[sell_mask], marker = 'x', color = 'red')
-
-
-def cross_validation(
-        normalised_daily_excess_returns : np.ndarray,
-        price_series : np.ndarray,
-        window_size_sweep : np.ndarray,
-        boillinger_band_threshold_sweep : np.ndarray,
-        initial_cash : float = 1.,
-        ) -> float:
-    """
-    Performs a k-fold cross validation on a mean reversion strategy 
-    to find optimal window size and boillinger band threshold.
-
-    Arguments:
-    ----------
-    normalised_daily_excess_returns    : {np.ndarray}
-                                            > An array of normalised daily excess returns.
-    price_series                        : {np.ndarray}
-                                            > An array of prices.
-    k                                   : {int}
-                                            > The number of folds.
-    window_size                         : {int}
-                                            > The window size for the moving average.
-    boillinger_band_threshold           : {float}
-                                            > The threshold for the boillinger bands.
-    initial_cash                        : {float}
-                                            > The initial cash to start with.
-
-    Returns:
-    --------
-    optim_window                        : {float}
-                                            > The optimal window size.
-    optim_threshold                     : {float}
-                                            > The optimal boillinger band threshold.
-    """
-
-    # define the eval function
-    eval_func = lambda x : x / initial_cash
-
-    # create meshgrid
-    window_i, bb_j = np.meshgrid(window_size_sweep, boillinger_band_threshold_sweep, indexing = 'ij')
-
-    # create eval array
-    eval_vec = np.zeros(np.shape(np.ravel(window_i)))
-
-    # perform parameter sweep
-    for idx, (window, threshold) in enumerate(zip(np.ravel(window_i), np.ravel(bb_j))):
-
-        strategy_returns, _, _ = moving_average_mean_reversion_strategy(
-            normalised_daily_excess_returns = normalised_daily_excess_returns,
-            price_series = price_series,
-            window_size = np.ravel(window_i)[idx],
-            boillinger_band_threshold = np.ravel(bb_j)[idx],
-            initial_cash = initial_cash)
-        
-        eval_vec[idx] += eval_func(strategy_returns[-1])
-
-        print(f"Window Size: {window:^15} | Boillinger Band Threshold: {threshold:^15.3f} | Returns: {eval_vec[idx]:^15}")
-
-
-    # get optimal parameters
-    optim_window = np.ravel(window_i)[np.argmax(eval_vec)]
-    optim_threshold = np.ravel(bb_j)[np.argmax(eval_vec)]
-
-    return optim_window, optim_threshold

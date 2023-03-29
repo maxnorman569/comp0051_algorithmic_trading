@@ -121,16 +121,18 @@ def get_daily_excess_return(
     daily_effr_column = daily_risk_free_rate.columns[0]
 
     # concatenate data
-    data = pd.concat([closing_price, daily_risk_free_rate], axis=1)
+    data = closing_price.join(daily_risk_free_rate, how = 'left')
+    # data = pd.concat([closing_price, daily_risk_free_rate], axis=1)
 
     # drop na
-    data = data.dropna()
+    # data[daily_effr_column] = data[daily_effr_column].fillna(method = 'ffill').to_numpy()
+    data[daily_effr_column].fillna(method='ffill', inplace=True)
 
     # get daily % change
-    data['daily_returns'] = data[price_column].pct_change()
+    data['daily_returns'] = data[price_column].pct_change().fillna(0).to_numpy()
 
     # get excess returns
-    data['daily_excess_returns'] = data['daily_returns'] - data[daily_effr_column]
+    data['daily_excess_returns'] = data['daily_returns'].values - data[daily_effr_column].values
 
     return data.fillna(0)
 
@@ -189,49 +191,44 @@ def get_q_2_cw_data():
     # get nomarlised excess returns
     df['normalised_excess_returns'] = normalise_data(df['daily_excess_returns'].to_numpy())
 
+    # get compounded risk-free rate
+    df['risk_free_rate_factor'] = df['daily_effr'].to_numpy() + 1.
+
     return df
 
 
 ########## GENERAL PROCESSING FUNCTIONS ##########
 
 def get_train_test_split(
-        x_data : np.ndarray,
-        y_data : np.ndarray,
-        split : float,
-        ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        splitindex : int,
+        **series : torch.Tensor
+        ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
     """
     Returns a train and test split of the data.
     
     Arguments:
     ----------
-    x_data      : {torch.Tensor}
-                    > The input data.
-    y_data      : {torch.Tensor}
-                    > The output data.
-    split       : {float}
-                    > The split ratio.
+    splitindex  : {int}
+                    > The index to split the data at.
+    **series    : {torch.Tensor}
+                    > The data to be split.
     
     Returns:
     ----------
-    x_train     : {torch.Tensor}
-                    > The input training data.
-    y_train     : {torch.Tensor}
-                > The output training data.
-    x_test      : {torch.Tensor}
-                    > The input test data.
-    y_test      : {torch.Tensor}
-                    > The output test data.
+    train       : {torch.Tensor}
+                    > The training data.
+    test        : {torch.Tensor}
+                    > The test data.
     """
-    # get split index
-    split_index = int(len(x_data) * split)
+    # get the key and values
+    series_keys = series.keys()
+    series_values = series.values()
 
-    # get train and test data
-    x_train = x_data[:split_index]
-    y_train = y_data[:split_index]
-    x_test = x_data[split_index:]
-    y_test = y_data[split_index:]
+    # get the train and test split
+    train_dict = {key : values[:splitindex] for key, values in zip(series_keys, series_values)}
+    test_dict = {key : values[splitindex:] for key, values in zip(series_keys, series_values)}
 
-    return x_train, y_train, x_test, y_test
+    return train_dict, test_dict
 
 
 def get_moving_average(
