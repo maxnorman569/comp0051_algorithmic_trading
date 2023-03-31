@@ -91,27 +91,28 @@ def plot_price_and_returns(
                     > The figure containing the plots.
     
     """
-    fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(15, 10))
+    fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(20, 7))
 
     # plot the original price series
-    # plot the original price series
-    ax1.plot(X_train, P_train, color='black', lw=1.5, alpha=1, label='Training Adj Close Price')
-    ax1.plot(X_test, P_test, color='blue', lw=1.5, alpha=1, label='Training Adj Close Price')
     ax1.axvline(x=len(X_train), color='red', lw=1, alpha=1, label='Training-Testing Split')
+    ax1.plot(X_train, P_train, color='black', lw=1.5, alpha=1, )
+    ax1.plot(X_test, P_test, color='black', lw=1.5, alpha=1, )
+
     ax1.set_title('S&P 500 Adjusted Closing Price', fontsize=16, fontweight='bold')
-    ax1.set_xlabel('Time', fontsize=14)
-    ax1.set_ylabel('Price', fontsize=14)
+    # ax1.set_xlabel('Time', fontsize=14)
+    ax1.set_ylabel('Price (USD)', fontsize=14)
     ax1.grid(True)
-    ax1.legend()
+    ax1.legend(labels = ['Training-Testing Split'], loc = 'upper left')
 
     # plot the normalised excess returns
-    ax2.plot(X_train, R_train, color = 'black', lw = 0.8, alpha = 1, label = 'Training Daily Excess Returns')
-    ax2.plot(X_test, R_test, color = 'blue', lw = 0.8, alpha = 1, label = 'Test Daily Excess Returns')
     ax2.axvline(x = len(X_train), color = 'red', lw = 0.8, alpha = 1, label='Training-Testing Split')
+    ax2.plot(X_train, R_train, color = 'black', lw = 0.8, alpha = 1, )
+    ax2.plot(X_test, R_test, color = 'black', lw = 0.8, alpha = 1, )
     ax2.set_title('S&P 500 Daily Excess Returns', fontsize=16, fontweight='bold')
     ax2.set_xlabel('Time', fontsize=14)
     ax2.set_ylabel('Daily Excess Returns (%)', fontsize=14)
     ax2.grid(True)
+    ax2.legend(labels = ['Training-Testing Split'], loc = 'upper left')
 
     return fig
 

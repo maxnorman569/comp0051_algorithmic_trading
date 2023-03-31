@@ -18,7 +18,7 @@ import datetime
 from typing import List, Tuple, Dict
 
 
-def get_ma_cross_over_signal(
+def get_ma_breakout_signal(
     price_series: np.ndarray,
     window_size : int, 
     ) -> np.ndarray:
@@ -72,14 +72,14 @@ def get_ma_cross_over_signal(
                 signal[i] = 0
 
         # buy
-        elif p > lower_bound:
+        elif p > upper_bound:
             buy_mask[i] = 1
-            signal[i] = -1*(lower_bound - p)
+            signal[i] = -1*(upper_bound - p)
             continue
 
-        elif p < upper_bound:
+        elif p < lower_bound:
             sell_mask[i] = 1
-            signal[i] = -1*(upper_bound - p)
+            signal[i] = -1*(lower_bound - p)
             continue
 
         else:

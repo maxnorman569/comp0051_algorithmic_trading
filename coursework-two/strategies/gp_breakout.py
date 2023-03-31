@@ -107,12 +107,12 @@ def optimise_marginal_likelihood(
 
     return lengthscal_hat, noise_hat
 
-def get_gp_cross_over_signal(
+def get_gp_breakout_signal(
     X : torch.Tensor,
     P : torch.Tensor,
     lengthscale : float = 2.5,
     noise : float = .5,
-    window : int = 25,
+    window : int = 20,
     ) -> torch.Tensor:
     """
     Get the signal for a GP cross over strategy.
@@ -138,6 +138,10 @@ def get_gp_cross_over_signal(
 
     signal = torch.zeros_like(X)   
 
+    upper_cci, lower_cci = torch.zeros_like(X), torch.zeros_like(X)
+    gp_map = torch.zeros_like(X)
+    gp_pred = torch.zeros_like(X)
+
     # sequential prediction
     for i, (x, p) in enumerate(zip(X, P)):
         
@@ -156,30 +160,48 @@ def get_gp_cross_over_signal(
 
         f_preds, lower, upper = window_gp.get_posterior(X[n_start:n_end], True)
 
-        if (p > lower[-1]) and (p < upper[-1]):
+        if i + 1 < len(X):
+            f_test = window_gp.get_posterior_predictive(X[n_end+1].unsqueeze(-1), False).mean
+
+        # upper_cci[i] = upper[-1]
+        # lower_cci[i] = lower[-1]
+        # gp_map[i] = f_preds.mean[-1].item()
+        # gp_pred[i] = f_test.item()
+
+        # if (p > lower[-1]) and (p < upper[-1]):
             
-            if (signal[i-1] > 0) and (p > f_preds.mean[-1].item()):
-                signal[i] = signal[i-1]
+        #     if (signal[i-1] > 0) and (p > f_preds.mean[-1].item()):
+        #         signal[i] = signal[i-1]
 
-            elif (signal[i-1] < 0) and (p < f_preds.mean[-1].item()):
-                signal[i] = signal[i-1]
+        #     elif (signal[i-1] < 0) and (p < f_preds.mean[-1].item()):
+        #         signal[i] = signal[i-1]
 
-            else:
-                signal[i] = 0
+        #     else:
+        #         signal[i] = 0
         
-        # buy
-        elif p >= upper[-1]:
-            buy_mask[i] = 1
-            signal[i] = p - upper[-1]
+        # # buy
+        # elif p >= upper[-1]:
+        #     buy_mask[i] = 1
+        #     signal[i] = p - upper[-1]
 
-        # sell
-        elif p <= lower[-1]:
-            sell_mask[i] = 1
-            signal[i] = p - lower[-1]
+        # # sell
+        # elif p <= lower[-1]:
+        #     sell_mask[i] = 1
+        #     signal[i] = p - lower[-1]
 
+        if f_test > p:
+            signal[i] = f_test - p
 
-    # norm scale the signal
-    scaled_signal = signal / torch.std(signal)
-    scaled_signal = torch.clamp(scaled_signal, -2, 2)
+        elif f_test < p:
+            signal[i] = f_test - p
+
+        else:
+            signal[i] = 0
+
+    return signal, buy_mask, sell_mask, gp_map, lower_cci, upper_cci, gp_pred
+
+    # # norm scale the signal
+    # scaled_signal = signal / torch.std(signal)
+    # scaled_signal = torch.clamp(scaled_signal, -2, 2)
     
-    return scaled_signal / 2, buy_mask, sell_mask
+    # return scaled_signal / 2, buy_mask, sell_mask, gp_map, lower_cci, upper_cci, gp_pred

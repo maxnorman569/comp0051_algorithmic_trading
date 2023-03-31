@@ -18,10 +18,13 @@ def sharpe_ratio(
         sharpe_ratio        : {float}
                                 > The sharpe ratio of a strategy
     """
+ 
     # computes the sharpe ratio
-    sharpies = np.sum(excess_returns) / (np.std(excess_returns) * np.sqrt(len(excess_returns)))
+    # sharpies = np.sum(excess_returns) / (np.std(excess_returns) * np.sqrt(len(excess_returns)))
+
+    sharpies = ((np.mean(excess_returns)*len(excess_returns)) / (np.std(excess_returns)*np.sqrt(len(excess_returns))))
     
-    return np.sum(sharpies)
+    return sharpies 
 
 
 def sortino_ratio( 
@@ -42,9 +45,11 @@ def sortino_ratio(
                                 > The sortino ratio of a strategy
     """
     # computes the sortino ratio
-    sorties = np.sum(excess_returns) / (np.std(excess_returns[excess_returns < 0]) * np.sqrt(len(excess_returns)))
+    # sorties = np.sum(excess_returns) / (np.std(excess_returns[excess_returns < 0]) * np.sqrt(len(excess_returns)))
 
-    return np.sum(sorties)
+    sorties = ((np.mean(excess_returns)*len(excess_returns)) / (np.std(excess_returns[excess_returns < 0])*np.sqrt(len(excess_returns))))
+
+    return sorties
 
 
 def max_drawdown(

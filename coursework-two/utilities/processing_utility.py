@@ -267,3 +267,21 @@ def get_moving_average(
 
     return ma_series
 
+
+def get_rsi(P):
+    delta = pd.DataFrame({'price' : P}).diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean().fillna(0)
+    avg_loss = loss.rolling(window=14).mean().fillna(0)
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi.fillna(0)
+
+
+def get_macd(P):
+    ema_12 = pd.DataFrame({'price' : P}).ewm(span=12, adjust=False).mean().fillna(0)
+    ema_26 = pd.DataFrame({'price' : P}).ewm(span=26, adjust=False).mean().fillna(0)
+    macd = ema_12 - ema_26
+    signal = macd.ewm(span=9, adjust=False).mean()
+    return macd.fillna(0)

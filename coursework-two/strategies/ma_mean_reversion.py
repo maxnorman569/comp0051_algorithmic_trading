@@ -53,8 +53,8 @@ def get_ma_mean_reversion_signal(
     # get signal
     signal = torch.zeros_like(normalised_daily_excess_returns_series)    
 
-    buy_count = 0
-    sell_count = 0
+    buy_mask = torch.zeros_like(normalised_daily_excess_returns_series)
+    sell_mask = torch.zeros_like(normalised_daily_excess_returns_series)
 
     for i, (value, ma, upper, lower) in enumerate(zip(normalised_daily_excess_returns_series, moving_average, upper, lower)):
 
@@ -73,14 +73,14 @@ def get_ma_mean_reversion_signal(
                 signal[i] = signal[i-1]
 
         if value <= lower:
-            buy_count += 1
+            buy_mask[i] += 1
             signal[i] = torch.clamp(value - lower, min = -1, max = None).item()
 
         if value >= upper:
-            sell_count += 1
+            sell_mask[i] += 1
             signal[i] = torch.clamp(value - upper, min = None, max = 1).item()
     
-    return np.array(signal)
+    return np.array(signal), buy_mask, sell_mask
 
 
 def plot_strategy(

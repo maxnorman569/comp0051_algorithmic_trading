@@ -72,15 +72,16 @@ def get_theta_and_V(
             continue
         
        # get position size
-        theta[i] = V_t[i-1] * leverage * s
+        # theta[i] = V_t[i-1] * leverage * s
+        theta[i] = V_total[i-1] * leverage * s
 
         # get V_t
-        delta_V_t[i] = (daily_excess_return_series[i] * theta[i]) 
+        delta_V_t[i] = (daily_excess_return_series[i+1] * theta[i]) 
         V_t[i] = delta_V_t[i] + V_t[i-1]
         
         # get V_cap_t
         M = np.abs(theta[i]) / leverage
-        delta_V_cap[i] = (V_total[i-1] - M) * (daily_risk_free_series[i]) 
+        delta_V_cap[i] = (V_total[i-1] - M) * (daily_risk_free_series[i+1]) 
         V_cap[i] = delta_V_cap[i] + V_cap[i-1]
 
         # Get V_total_t
